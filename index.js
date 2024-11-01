@@ -46,15 +46,9 @@ class ComponentParser {
 
     // Recursively copy directory contents
     copyDirectoryContents(sourceDir, targetDir, currentDepth = 0) {
-        // Stop if max depth is reached
         if (currentDepth >= this.depth) return;
-
-        // Ensure target directory exists
         fs.mkdirSync(targetDir, { recursive: true });
-
         this.log(`Copying contents from: ${sourceDir}`);
-
-        // Read directory contents
         const files = fs.readdirSync(sourceDir);
 
         files.forEach(file => {
@@ -63,23 +57,17 @@ class ComponentParser {
             const stat = fs.statSync(sourcePath);
 
             if (stat.isDirectory()) {
-                // Recursively copy subdirectories
                 this.copyDirectoryContents(sourcePath, targetPath, currentDepth + 1);
             } else {
-                // Copy files
                 fs.copyFileSync(sourcePath, targetPath);
             }
         });
     }
 
-    // Recursively find HTML files in the specified directory
+    // Find HTML files in the specified directory
     findHtmlFiles(dir, currentDepth = 0) {
-        // Stop if max depth is reached
         if (currentDepth >= this.depth) return [];
-
         let htmlFiles = [];
-
-        // Read directory contents
         const files = fs.readdirSync(dir);
 
         files.forEach(file => {
@@ -87,10 +75,7 @@ class ComponentParser {
             const stat = fs.statSync(fullPath);
 
             if (stat.isDirectory()) {
-                // Recursively search subdirectories
-                htmlFiles = htmlFiles.concat(
-                    this.findHtmlFiles(fullPath, currentDepth + 1)
-                );
+                htmlFiles = htmlFiles.concat(this.findHtmlFiles(fullPath, currentDepth + 1));
             } else if (
                 path.extname(file) === '.html' && 
                 (!this.names || this.names.has(path.basename(file, '.html')))
@@ -107,67 +92,127 @@ class ComponentParser {
         if (!this.components.has(componentName)) {
             throw new Error(`Component not found: ${componentName}`);
         }
-
+    
         let template = this.components.get(componentName);
-
-        // Replace props in template
+        
+        // Convert props to a Map for the parsers
+        const propsMap = new Map(Object.entries(props));
+        
+        // First, handle basic prop replacements
         Object.entries(props).forEach(([key, value]) => {
             template = template.replace(new RegExp(`{{${key}}}`, 'g'), value);
         });
-        const start = `\n<!-- Component components/${componentName} -->\n`
-        const end = `\n<!-- End component components/${componentName} -->\n`
+    
+        // Process conditionals
+        template = this.parseConditionals(template, propsMap);
+        
+        // Process loops (if you have any)
+        template = this.parseLoops(template, propsMap);
+    
+        const start = `\n<!-- Component components/${componentName} -->\n`;
+        const end = `\n<!-- End component components/${componentName} -->\n`;
+        
+        // Return only the processed content
         return `${start}${template}${end}`;
     }
 
-    // Parse an HTML file, replacing component tags
+    // Parse an HTML file, replacing component tags and handling new syntax
     parseHtmlFile(filePath) {
         let content = fs.readFileSync(filePath, 'utf-8');
 
-        // Regular expression to find custom component tags
+        // Replace component tags
         const componentRegex = /<(c[a-zA-Z0-9]+)([^>]*)\/>/g;
-
         content = content.replace(componentRegex, (match, componentTag, attributesStr) => {
-            // Remove 'c' prefix and get component name
             const componentName = componentTag.slice(1);
-            // Parse attributes
             const props = {};
             const attrRegex = /(\w+)[\s]?=[\s]?"([^"]*)"/g;
             let attrMatch;
             while ((attrMatch = attrRegex.exec(attributesStr)) !== null) {
                 props[attrMatch[1]] = attrMatch[2];
             }
-
-            // Render component
             return this.renderComponent(componentName, props);
         });
 
         return content;
     }
 
+    parseConditionals(content, props) {
+        // Helper function to evaluate a condition with props
+        const evaluateCondition = (condition) => {
+            let evaluableCondition = condition;
+            props.forEach((value, key) => {
+                const regex = new RegExp('\\b' + key + '\\b', 'g');
+                const replacementValue = typeof value === 'string' ? `"${value}"` : value;
+                evaluableCondition = evaluableCondition.replace(regex, replacementValue);
+            });
+            
+            try {
+                return new Function(`return ${evaluableCondition}`)();
+            } catch (error) {
+                console.error(`Error evaluating condition: ${condition}`, error);
+                return false;
+            }
+        };
+    
+        // Process all conditional blocks
+        let result = content;
+        const conditionalRegex = /{%\s*if\s*\((.*?)\)\s*%}([\s\S]*?)(?:{%\s*endif\s*%})/g;
+        
+        result = result.replace(conditionalRegex, (match, condition, block) => {
+            // Split the block into if/elif/else sections
+            const sections = block.split(/{%\s*(?:elif|else)\s*(?:\(.*?\))?\s*%}/);
+            const conditions = [condition, ...block.match(/{%\s*elif\s*\((.*?)\)\s*%}/g)?.map(c => 
+                c.match(/\((.*?)\)/)[1]
+            ) || []];
+            
+            // Check each condition in order
+            for (let i = 0; i < conditions.length; i++) {
+                if (evaluateCondition(conditions[i])) {
+                    // Return the content for the first matching condition
+                    return sections[i].trim();
+                }
+            }
+            
+            // If no conditions match and there's an else block, return that
+            if (sections.length > conditions.length) {
+                return sections[sections.length - 1].trim();
+            }
+            
+            return '';
+        });
+    
+        return result;
+    }
+
+    // Process for loops
+    parseLoops(content, props) {
+        const forRegex = /{% for\s+(\w+)\s+in\s+(\w+)\s*%}([\s\S]*?){% endfor %}/g;
+        return content.replace(forRegex, (match, item, list, block) => {
+            if (Array.isArray(this.components.get(list))) {
+                return props.get(list)
+                    .map(val => block.replace(new RegExp(`{{${item}}}`, 'g'), val))
+                    .join('');
+            }else{
+                return props.get(list)
+                    .split(',')
+                    .map(val => block.replace(new RegExp(`{{${item}}}`, 'g'), val))
+                    .join('');
+            }
+        });
+    }
+
     // Process all HTML files in the specified directory
     processDirectory() {
         const inputDir = path.join(process.cwd(), this.directory);
-
-        // Copy all directory contents first
         this.copyDirectoryContents(inputDir, this.outputDir);
-
-        // Find all HTML files
         const htmlFiles = this.findHtmlFiles(inputDir);
 
-        // Process each HTML file
         htmlFiles.forEach(filePath => {
             const processedContent = this.parseHtmlFile(filePath);
-            
-            // Construct output path (replace input dir with output dir)
             const relativePath = path.relative(inputDir, filePath);
             const outputPath = path.join(this.outputDir, relativePath);
-
-            // Ensure output directory exists
             fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-
-            // Write processed content
             fs.writeFileSync(outputPath, processedContent);
-
             this.log(`Processed: ${filePath} -> ${outputPath}`);
         });
 
@@ -175,19 +220,30 @@ class ComponentParser {
     }
 }
 
-// Parse command line arguments
+// Parse command line arguments with help option
 const parseArgs = () => {
     const args = process.argv.slice(2);
     const options = {};
-
-    // Find directory (first non-option argument)
     const directory = args.find(arg => !arg.startsWith('--'));
+
     if (!directory) {
         console.error('Please specify a directory to parse');
         process.exit(1);
     }
 
-    // Parse options
+    // Parse options and help command
+    if (args.includes('help')) {
+        console.log(`
+Options:
+  --depth=<n>       Set max directory depth for parsing.
+  --names=a,b,...   Specify specific component names to render.
+  --out=<path>      Specify output directory.
+  --logs            Enable logging for debug.
+  help              Show help with list of options.
+`);
+        process.exit(0);
+    }
+
     args.forEach(arg => {
         if (arg.startsWith('--depth=')) {
             options.depth = parseInt(arg.split('=')[1], 10);

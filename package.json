@@ -1,5 +1,5 @@
 {
-    "name": "htmlc",
+    "name": "@sojs_coder/htmlc",
     "version": "1.0.0",
     "description": "A static HTML component parser and templating tool",
     "main": "index.js",
