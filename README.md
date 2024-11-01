@@ -16,9 +16,7 @@ A high-performance Node.js library for parsing and processing HTML components wi
 ## Installation
 
 ```bash
-npm install component-parser
-# or
-yarn add component-parser
+npm install @sojs_coder/htmlc -g
 ```
 
 ## Quick Start
@@ -76,7 +74,7 @@ project/
 4. Process your pages:
 
 ```javascript
-const ComponentParser = require('@sojs-coder/htmlc');
+const ComponentParser = require('@sojs_coder/htmlc');
 
 const parser = new ComponentParser('pages');
 parser.processDirectory();
