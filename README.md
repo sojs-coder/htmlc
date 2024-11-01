@@ -1,90 +1,269 @@
-# htmlc - HTML Component Parser
+# Component Parser Library
 
-`htmlc` is a CLI tool for parsing and transforming static HTML files with component-based templating.
+A high-performance Node.js library for parsing and processing HTML components with support for templating, conditional rendering, loops, and nested components.
+
+## Features
+
+- ✨ Component-based HTML processing
+- 🚀 Parallel processing using worker threads
+- 🔄 Template caching for improved performance
+- 🎯 Conditional rendering support
+- 📦 Loop processing
+- 🔍 Selective component processing
+- 📁 Directory-based processing
+- 🎨 Clean component syntax
 
 ## Installation
 
 ```bash
-npm install -g htmlc
+npm install component-parser
+# or
+yarn add component-parser
 ```
 
-## Usage
+## Quick Start
+
+1. Create a components directory in your project:
+
+```
+project/
+├── components/
+│   ├── header.html
+│   ├── footer.html
+│   └── nav/
+│       └── menu.html
+├── pages/
+│   └── index.html
+```
+
+2. Create your components with the new syntax:
+
+```html
+<!-- components/header.html -->
+<header>
+  <h1>{{title}}</h1>
+  {% if (showSubtitle) %}
+    <h2>{{subtitle}}</h2>
+  {% endif %}
+</header>
+
+<!-- components/nav/menu.html -->
+<nav>
+  <ul>
+    {% for item in menuItems %}
+      <li>{{item}}</li>
+    {% endfor %}
+  </ul>
+</nav>
+```
+
+3. Use components in your HTML files:
+
+```html
+<!-- pages/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Website</title>
+</head>
+<body>
+    <header title="Welcome" showSubtitle="true" subtitle="Hello World" />
+    <nav/menu menuItems="Home,About,Contact" />
+</body>
+</html>
+```
+
+4. Process your pages:
+
+```javascript
+const ComponentParser = require('@sojs-coder/htmlc');
+
+const parser = new ComponentParser('pages');
+parser.processDirectory();
+```
+
+## Command Line Usage
+
+The library can be used from the command line:
 
 ```bash
 # Basic usage
-htmlc <directory>
+htmlc pages
 
 # With options
-htmlc <directory> --depth=2 --names=index,login --out=built --logs
+htmlc pages --depth=2 --names=header,footer --out=dist --logs
 ```
 
-### Options
+### Command Line Options
 
-- `<directory>`: Source directory containing HTML files
-- `--depth=<num>`: Maximum subdirectory depth to parse (default: all)
-- `--names=<list>`: Comma-separated list of HTML file names to process
-- `--out=<dir>`: Output directory for processed files
-- `--logs`: Enable verbose logging
+- `--depth=<n>`: Set maximum directory depth for parsing
+- `--names=a,b,...`: Specify specific component names to process
+- `--out=<path>`: Specify output directory
+- `--logs`: Enable debug logging
+- `help`: Show help information
 
-## Components
+## API Documentation
 
-Create components in a `components/` directory. Use `c` prefix for custom components.
+### ComponentParser Class
 
-Example `components/navigation.html`:
-```html
-<header>{{prop1}} {{prop2}}</header>
+```javascript
+const parser = new ComponentParser(directory, options);
 ```
 
-Example usage in HTML:
-```html
-<cnavigation prop1="Welcome" prop2="to my site" />
+#### Options
+
+```javascript
+{
+  depth: number,     // Maximum directory depth (default: Infinity)
+  names: string[],   // Specific component names to process
+  out: string,       // Output directory path
+  logs: boolean      // Enable debug logging
+}
 ```
 
-### If Statements
+### Component Syntax
 
-Example `components/navigation.html`
+#### Basic Component Usage
+
 ```html
-<header>
-    {% if (page == "main") %}
-        <h1>Main</h1>
-    {% elif (page == "login" || page == "signup") %}
-        <h1>Auth Page</h1>
-    {% else %}
-        <h1>{{page}}</h1>
-    {% endif %}
-</header>
+<componentName prop1="value1" prop2="value2" />
 ```
 
-Example usage in HTML:
-- `pages/login.html`
-  ```html
-  <cnavigation page = "login"/>
-  ```
-- `pages/index.html`
-  ```html
-  <cnavigation page = "main" />
-  ```
-Etc...
+#### Conditional Rendering
 
-### For Loops
-
-Example `components/navigation.html`
 ```html
-<header>
-    {% for link in links %}
-        <a href = "/{{link}}">Go to {{link}}</a>
+{% if (condition) %}
+  Content to show if condition is true
+{% endif %}
+
+{% if (condition1) %}
+  Content for condition1
+{% elif (condition2) %}
+  Content for condition2
+{% else %}
+  Default content
+{% endif %}
+```
+
+#### Loops
+
+```html
+{% for item in items %}
+  <div>{{item}}</div>
+{% endfor %}
+```
+
+## Advanced Examples
+
+### 1. Nested Components with Props
+
+```html
+<!-- components/card.html -->
+<div class="card">
+  <header title="{{title}}" showSubtitle="{{showSubtitle}}" subtitle="{{subtitle}}" />
+  <div class="card-content">
+    {{content}}
+  </div>
+  <footer copyright="{{copyright}}" />
+</div>
+
+<!-- Usage -->
+<card 
+  title="My Card" 
+  showSubtitle="true" 
+  subtitle="Card Subtitle"
+  content="Card content goes here"
+  copyright="2024"
+/>
+```
+
+### 2. Dynamic Lists with Conditionals
+
+```html
+<!-- components/userList.html -->
+<div class="user-list">
+  {% if (hasUsers) %}
+    {% for user in users %}
+      <div class="user-card">
+        <h3>{{user}}</h3>
+        {% if (showEmail) %}
+          <email address="{{user}}@example.com" />
+        {% endif %}
+      </div>
     {% endfor %}
-</header>
+  {% else %}
+    <p>No users found</p>
+  {% endif %}
+</div>
+
+<!-- Usage -->
+<userList 
+  hasUsers="true" 
+  users="John,Jane,Bob" 
+  showEmail="true"
+/>
 ```
 
-Example HTML:
-```html
-<cnavigation links="login,signup,auth" />
+### 3. Programmatic Usage with Async/Await
+
+```javascript
+const ComponentParser = require('component-parser');
+
+async function buildWebsite() {
+  const parser = new ComponentParser('src', {
+    depth: 3,
+    names: ['header', 'footer', 'nav'],
+    out: 'dist',
+    logs: true
+  });
+
+  try {
+    await parser.processDirectory();
+    console.log('Website built successfully!');
+  } catch (error) {
+    console.error('Build failed:', error);
+  }
+}
+
+buildWebsite();
 ```
 
-> List items should be passed to properties separated by a signle comma, no space
-> To render variables, follow the patter `{{varname}}`, not `{{ varname}}` or `{{ varname }}`. (Note the spaces)
+## Performance Tips
+
+1. **Template Caching**
+   - Templates are automatically cached
+   - Identical components with same props use cached versions
+
+2. **Parallel Processing**
+   - Large directories are processed in parallel
+   - Processing is automatically distributed across available CPU cores
+
+3. **Selective Processing**
+   - Use the `names` option to process only specific components
+   - Set appropriate `depth` to limit directory recursion
+
+## Error Handling
+
+The library throws descriptive errors for common issues:
+
+```javascript
+try {
+  await parser.processDirectory();
+} catch (error) {
+  if (error.message.includes('Components directory not found')) {
+    // Handle missing components directory
+  } else if (error.message.includes('Component not found')) {
+    // Handle missing component
+  } else {
+    // Handle other errors
+  }
+}
+```
+
+## Contributing
+
+Contributions are welcome! Please read our contributing guidelines and submit pull requests to our repository.
 
 ## License
 
-MIT
+MIT License - feel free to use this library in your projects!
