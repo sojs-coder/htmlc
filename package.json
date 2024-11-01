@@ -1,26 +1,26 @@
 {
     "name": "@sojs_coder/htmlc",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "A static HTML component parser and templating tool",
     "main": "index.js",
     "bin": {
-      "htmlc": "./index.js"
+        "htmlc": "./index.js"
     },
     "keywords": [
-      "html",
-      "components",
-      "static-site",
-      "templating",
-      "cli"
+        "html",
+        "components",
+        "static-site",
+        "templating",
+        "cli"
     ],
     "author": "SoJS",
     "license": "MIT",
     "repository": {
-      "type": "git",
-      "url": "https://github.com/sojs-coder/htmlc.git"
+        "type": "git",
+        "url": "https://github.com/sojs-coder/htmlc.git"
     },
     "engines": {
-      "node": ">=14.0.0"
+        "node": ">=14.0.0"
     },
     "preferGlobal": true
-  }
+}
