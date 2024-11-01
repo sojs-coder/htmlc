@@ -103,14 +103,14 @@ class ComponentParser {
         return htmlFiles.flat();
     }
 
-    renderComponent(componentName, props) {
+    renderComponent(componentName, props, from) {
         const cacheKey = `${componentName}-${JSON.stringify(props)}`;
         if (this.templateCache.has(cacheKey)) {
             return this.templateCache.get(cacheKey);
         }
 
         if (!this.components.has(componentName)) {
-            throw new Error(`Component not found: ${componentName}`);
+            throw new Error(`Component not found: ${componentName} (in: ${from})`);
         }
 
         let template = this.components.get(componentName);
@@ -122,14 +122,14 @@ class ComponentParser {
 
         template = this.parseConditionals(template, propsMap);
         template = this.parseLoops(template, propsMap);
-        template = this.parseComponentTags(template);
+        template = this.parseComponentTags(template, from);
 
         const result = `\n<!-- Component components/${componentName} -->\n${template}\n<!-- End component components/${componentName} -->\n`;
         this.templateCache.set(cacheKey, result);
         return result;
     }
 
-    parseComponentTags(content) {
+    parseComponentTags(content, from) {
         const comments = [];
         content = content.replace(COMMENT_REGEX, (match) => {
             comments.push(match);
@@ -144,7 +144,7 @@ class ComponentParser {
             while ((attrMatch = ATTR_REGEX.exec(attributesStr)) !== null) {
                 props[attrMatch[1]] = attrMatch[2];
             }
-            return this.renderComponent(componentTag, props);
+            return this.renderComponent(componentTag, props, from);
         });
 
         return content.replace(/<!--COMMENT_PLACEHOLDER_(\d+)-->/g,
@@ -205,7 +205,7 @@ class ComponentParser {
         await Promise.all(chunks.map(async chunk => {
             await Promise.all(chunk.map(async filePath => {
                 const content = await fs.readFile(filePath, 'utf-8');
-                const processedContent = this.parseComponentTags(content);
+                const processedContent = this.parseComponentTags(content, filePath);
                 const relativePath = path.relative(inputDir, filePath);
                 const outputPath = path.join(this.outputDir, relativePath);
 
