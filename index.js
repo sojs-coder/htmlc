@@ -26,6 +26,7 @@ class ComponentParser {
         this.enableLogs = options.logs || false;
         this.components = new Map();
         this.templateCache = new Map(); // Cache for parsed templates
+        this.failedComponents = new Map(); // Track failed component loads
     }
 
     log(message) {
@@ -111,6 +112,8 @@ class ComponentParser {
 
         if (!this.components.has(componentName)) {
             console.warn(`Component not found: ${componentName} (in: ${from})`);
+            const key = `${componentName}|${from}`;
+            this.failedComponents.set(key, (this.failedComponents.get(key) || 0) + 1);
             return null;
         }
 
@@ -217,6 +220,13 @@ class ComponentParser {
         }));
 
         console.log(`\nProcessing complete. Output directory: ${this.outputDir}`);
+        if (this.failedComponents.size > 0) {
+            console.warn('\nFailed components:');
+            this.failedComponents.forEach((count, key) => {
+                const [component, file] = key.split('|');
+                console.warn(` - [${count} times] ${component} (first found in: ${file})`);
+            });
+        }
     }
 }
 
