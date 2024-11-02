@@ -2,6 +2,8 @@
 
 const fs = require('fs').promises;  // Use promises-based fs
 const path = require('path');
+const http = require('http');
+const ws = require('ws');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
 // Cache void tags Set
@@ -27,8 +29,78 @@ class ComponentParser {
         this.components = new Map();
         this.templateCache = new Map(); // Cache for parsed templates
         this.failedComponents = new Map(); // Track failed component loads
+        this.watch = options.watch || false;
+        this.processing = false;
+        this.wss;
+        this.server;
+        this.wsclients = new Map();
+        if (this.watch) {
+            this.watchDirectory();
+        }
+        if (options.server) {
+            this.startServer(options.port);
+        }
     }
-
+    async startServer(port) {
+        const server = http.createServer(async (req, res) => {
+            const filePath = path.join(this.outputDir, req.url === '/' ? '/index.html' : req.url);
+            try {
+                const content = await fs.readFile(filePath, 'utf-8');
+                const finalContent = await this.injectClientScript(content);
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(finalContent);
+            } catch (error) {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('File not found');
+            }
+        });
+        const wss = new ws.Server({ server });
+        wss.on('connection', ws => {
+            const metadata = {
+                currPath: null
+            }
+            this.wsclients.set(ws, metadata);
+            ws.on('message', message => {
+                console.log(`Received message: ${message}`);
+                const finalPath = Buffer.from(message).toString('utf-8');
+                this.wsclients.set(ws, { ...this.wsclients.get(ws), currPath: finalPath });
+            });
+        });
+        server.listen(port, () => {
+            console.log(`Server running at http://localhost:${port}/`);
+            this.server = server;
+            this.wss = wss;
+        });
+    }
+    async injectClientScript(content) {
+        const clientScript = await fs.readFile(path.join(__dirname, 'client.js'), 'utf-8');
+        return content.replace('</body>', `<script>${clientScript}</script></body>`);
+    }
+    watchDirectory() {
+        const fs = require('fs');
+        fs.watch(this.directory, async (eventType, filename) => {
+            if (filename && eventType === 'change') {
+                console.log(`File changed: ${filename}`);
+                try {
+                    await this.processDirectory();
+                    this.wss.clients.forEach(client => {
+                        const { currPath } = this.wsclients.get(client);
+                        if (currPath) {
+                            const path2 = (currPath === '/' ? '/index.html' : currPath);
+                            const filePath = path.join(this.outputDir, path2);
+                            fs.readFile(filePath, 'utf-8', (err, data) => {
+                                this.injectClientScript(data).then(content =>{
+                                    client.send(content);
+                                });
+                            });
+                        }
+                    });
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        });
+    }
     log(message) {
         this.enableLogs && console.log(message);
     }
@@ -194,6 +266,11 @@ class ComponentParser {
     }
 
     async processDirectory() {
+        if (this.processing) return;
+        this.processing = true;
+        this.failedComponents.clear();
+
+
         const inputDir = path.join(process.cwd(), this.directory);
         await this.loadComponents();
         await this.copyDirectoryContents(inputDir, this.outputDir);
@@ -227,6 +304,7 @@ class ComponentParser {
                 console.warn(` - [${count} times] ${component} (first found in: ${file})`);
             });
         }
+        this.processing = false;
     }
 }
 
@@ -266,6 +344,9 @@ Options:
   --names=a,b,...   Specify specific component names to render.
   --out=<path>      Specify output directory.
   --logs            Enable logging for debug.
+  --watch           Watch for changes in the directory.
+  --server          Start a server to serve the processed files.
+  --port=<n>        Specify the port for the server (default 9000).
   help              Show help with list of options.
 `);
             process.exit(0);
@@ -275,8 +356,14 @@ Options:
         args.forEach(arg => {
             if (arg.startsWith('--depth=')) options.depth = parseInt(arg.split('=')[1], 10);
             if (arg.startsWith('--names=')) options.names = arg.split('=')[1].split(',');
+            if (arg.startsWith('--port=')) options.port = parseInt(arg.split('=')[1], 10);
             if (arg.startsWith('--out=')) options.out = arg.split('=')[1];
             if (arg === '--logs') options.logs = true;
+            if (arg === '--watch') options.watch = true;
+            if (arg === '--server') {
+                options.server = true;
+                options.port = options.port || 9000;
+            }
         });
 
         return { directory, options };
