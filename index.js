@@ -110,7 +110,8 @@ class ComponentParser {
         }
 
         if (!this.components.has(componentName)) {
-            throw new Error(`Component not found: ${componentName} (in: ${from})`);
+            console.warn(`Component not found: ${componentName} (in: ${from})`);
+            return null;
         }
 
         let template = this.components.get(componentName);
@@ -144,7 +145,7 @@ class ComponentParser {
             while ((attrMatch = ATTR_REGEX.exec(attributesStr)) !== null) {
                 props[attrMatch[1]] = attrMatch[2];
             }
-            return this.renderComponent(componentTag, props, from);
+            return this.renderComponent(componentTag, props, from) || match;
         });
 
         return content.replace(/<!--COMMENT_PLACEHOLDER_(\d+)-->/g,

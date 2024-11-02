@@ -4,7 +4,7 @@
     "description": "A static HTML component parser and templating tool",
     "main": "index.js",
     "bin": {
-        "htmlc": "./index.js"
+        "htmlc": "index.js"
     },
     "keywords": [
         "html",
@@ -17,7 +17,7 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/sojs-coder/htmlc.git"
+        "url": "git+https://github.com/sojs-coder/htmlc.git"
     },
     "engines": {
         "node": ">=14.0.0"
