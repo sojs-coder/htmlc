@@ -34,6 +34,7 @@ class ComponentParser {
         this.wss;
         this.server;
         this.wsclients = new Map();
+        this.lastUpdatedTimes = new Map();
         if (this.watch) {
             this.watchDirectory();
         }
@@ -43,13 +44,24 @@ class ComponentParser {
     }
     async startServer(port) {
         const server = http.createServer(async (req, res) => {
-            const filePath = path.join(this.outputDir, req.url === '/' ? '/index.html' : req.url);
+            const url = new URL(req.url, `http://${req.headers.host}`);
+            const reqPath = url.pathname;
+            const filePath = path.join(this.outputDir, reqPath.endsWith("/") ? reqPath + 'index.html' : reqPath);
             try {
-                const content = await fs.readFile(filePath, 'utf-8');
-                const finalContent = await this.injectClientScript(content);
-                res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(finalContent);
+                const content = await fs.readFile(filePath);
+
+                if (filePath.endsWith('.html')) {
+                    const utf8Content = content.toString('utf-8');
+                    const finalContent = await this.injectClientScript(utf8Content);
+                    res.writeHead(200, { 'Content-Type': 'text/html' });
+                    res.end(finalContent);
+                } else {
+                    res.writeHead(200);
+                    res.end(content);
+                }
+
             } catch (error) {
+                console.log(error)
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('File not found');
             }
@@ -61,7 +73,6 @@ class ComponentParser {
             }
             this.wsclients.set(ws, metadata);
             ws.on('message', message => {
-                console.log(`Received message: ${message}`);
                 const finalPath = Buffer.from(message).toString('utf-8');
                 this.wsclients.set(ws, { ...this.wsclients.get(ws), currPath: finalPath });
             });
@@ -78,11 +89,11 @@ class ComponentParser {
     }
     watchDirectory() {
         const fs = require('fs');
-        fs.watch(this.directory, async (eventType, filename) => {
+        fs.watch(this.directory, { recursive: true }, async (eventType, filename) => {
             if (filename && eventType === 'change') {
                 console.log(`File changed: ${filename}`);
                 try {
-                    await this.processDirectory();
+                    await this.updateSingleFile(filename);
                     if (this.server) {
                         this.wss.clients.forEach(client => {
                             const { currPath } = this.wsclients.get(client);
@@ -91,14 +102,15 @@ class ComponentParser {
                                 const filePath = path.join(this.outputDir, path2);
                                 fs.readFile(filePath, 'utf-8', (err, data) => {
                                     this.injectClientScript(data).then(content => {
-                                        client.send(content);
+                                        client.send("reload")
+                                        // client.send(content);
                                     });
                                 });
                             }
                         });
                     }
                 } catch (err) {
-                    console.error(err);
+                    console.error(`Error processing file: ${filename}`);
                 }
             }
         });
@@ -106,7 +118,21 @@ class ComponentParser {
     log(message) {
         this.enableLogs && console.log(message);
     }
+    async updateSingleFile(filePath) {
+        const inputDir = path.join(process.cwd(), this.directory);
+        const outputPath = path.join(this.outputDir, path.relative(inputDir, filePath));
+        const fullInputPath = path.join(inputDir, filePath);
 
+        const fullOutputPath = path.join(this.outputDir, filePath);
+        if (!this.lastUpdatedTimes.has(fullInputPath) || Date.now() - this.lastUpdatedTimes.get(fullInputPath)  > 500) {
+            this.lastUpdatedTimes.set(fullInputPath, Date.now());
+            const content = await fs.readFile(fullInputPath, 'utf-8');
+            const processedContent = this.parseComponentTags(content, fullInputPath);
+            await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
+            await fs.writeFile(fullOutputPath, processedContent);
+            console.log(`Processed: ${fullInputPath} -> ${fullOutputPath}`);
+        }
+    }
     async loadComponents() {
         const componentDir = path.join(process.cwd(), 'components');
 
@@ -295,6 +321,7 @@ class ComponentParser {
                 await fs.mkdir(path.dirname(outputPath), { recursive: true });
                 await fs.writeFile(outputPath, processedContent);
                 this.log(`Processed: ${filePath} -> ${outputPath}`);
+                this.lastUpdatedTimes.set(filePath, Date.now());
             }));
         }));
 
