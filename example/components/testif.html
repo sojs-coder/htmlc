@@ -1,9 +1,13 @@
 {% if (value == "one" || value == "four") %}
-<p>Value is one or four!</p>
+    <p>Value is one or four!</p>
 {% elif (value == "two") %}
-<p>Value is two!</p>
+    <p>Value is two!</p>
 {%elif(value == "three") %}
-<p>Value is three!</p>
+    <p>Value is three!</p>
 {% else %}
-<p>Value is not one, two, or three! Value {{value}}</p>
+    <p>Value is not one, two, or three! Value {{value}}</p>
+{% endif %}
+
+{% if (value == "one") %}
+    <p>Value is one!</p>
 {% endif %}

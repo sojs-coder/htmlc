@@ -159,7 +159,7 @@ class ComponentParser {
         function generateEvaluateCondition(condition) {
             const evaluateCondition = new Function('props', `
                 const evaluableCondition = '${condition}'.replace(/\\b(\\w+)\\b/g, 
-                    match => props.has(match) ? props.get(match) : match);
+                    match => props.has(match) ? \`"\${props.get(match)}"\` : match);
                 try {
                     return new Function('return ' + evaluableCondition)();
                 } catch {
@@ -175,7 +175,7 @@ class ComponentParser {
                 c.match(/\((.*?)\)/)[1]) || [])];
             for (let i = 0; i < conditions.length; i++) {
                 const evaluateCondition = generateEvaluateCondition(conditions[i]);
-                if (evaluateCondition(new Set(conditions[i]))) {
+                if (evaluateCondition(props)) {
                     return sections[i].trim();
                 }
             }
