@@ -83,18 +83,20 @@ class ComponentParser {
                 console.log(`File changed: ${filename}`);
                 try {
                     await this.processDirectory();
-                    this.wss.clients.forEach(client => {
-                        const { currPath } = this.wsclients.get(client);
-                        if (currPath) {
-                            const path2 = (currPath === '/' ? '/index.html' : currPath);
-                            const filePath = path.join(this.outputDir, path2);
-                            fs.readFile(filePath, 'utf-8', (err, data) => {
-                                this.injectClientScript(data).then(content =>{
-                                    client.send(content);
+                    if (this.server) {
+                        this.wss.clients.forEach(client => {
+                            const { currPath } = this.wsclients.get(client);
+                            if (currPath) {
+                                const path2 = (currPath === '/' ? '/index.html' : currPath);
+                                const filePath = path.join(this.outputDir, path2);
+                                fs.readFile(filePath, 'utf-8', (err, data) => {
+                                    this.injectClientScript(data).then(content => {
+                                        client.send(content);
+                                    });
                                 });
-                            });
-                        }
-                    });
+                            }
+                        });
+                    }
                 } catch (err) {
                     console.error(err);
                 }
