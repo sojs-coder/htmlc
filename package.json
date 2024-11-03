@@ -1,6 +1,6 @@
 {
     "name": "@sojs_coder/htmlc",
-    "version": "1.3.2",
+    "version": "1.3.3",
     "description": "A static HTML component parser and templating tool",
     "main": "index.js",
     "bin": {
