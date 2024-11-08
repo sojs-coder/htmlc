@@ -258,6 +258,29 @@ try {
 }
 ```
 
+## Component blacklist
+
+The following components are reserved by HTML:
+```html
+<area />
+<base />
+<br />
+<col />
+<embed />
+<hr />
+<img />
+<input />
+<link />
+<menuitem />
+<meta />
+<param />
+<path />
+<source />
+<track />
+<wbr />
+```
+Naming convention follows `celement`. For example: `csource` instead of `source` to avoid conflicts. The same applies to non-void elements. For example use `<chead />` instead of `<head />` (`<head>` is an HTML element) 
+
 ## Contributing
 
 Contributions are welcome! Please read our contributing guidelines and submit pull requests to our repository.
