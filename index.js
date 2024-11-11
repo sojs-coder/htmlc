@@ -8,8 +8,8 @@ const { Worker, isMainThread, parentPort, workerData } = require('worker_threads
 
 // Cache void tags Set
 const VOID_TAGS = new Set([
-    "area", "base", "br", "col", "embed", "hr", "img", "input",
-    "link", "menuitem", "meta", "param", "source", "track", "wbr"
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", 
+    "menuitem", "meta", "param", "source", "track", "wbr", "path"
 ]);
 
 // Precompile frequently used RegExp patterns
