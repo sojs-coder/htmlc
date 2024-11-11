@@ -13,7 +13,7 @@ const VOID_TAGS = new Set([
 ]);
 
 // Precompile frequently used RegExp patterns
-const COMPONENT_REGEX = /<([a-zA-Z0-9/]+)([^>]*)\/>/g;
+const COMPONENT_REGEX = /<([a-zA-Z0-9_/]+)([^>]*)\/>/g;
 const COMMENT_REGEX = /<!--[\s\S]*?-->/g;
 const ATTR_REGEX = /(\w+)[\s]?=[\s]?"([^"]*)"/g;
 const CONDITIONAL_REGEX = /{%\s*if\s*\((.*?)\)\s*%}([\s\S]*?)(?:{%\s*endif\s*%})/g;
