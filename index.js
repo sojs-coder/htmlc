@@ -411,7 +411,7 @@ class ComponentParser {
             console.log(`Minifying files with extensions: ${this.toMinify.join(", ")}`);
             await Promise.all(this.toMinify.map(async ext => {
                 if (ext === "html") return;
-                if (!minificationOptions[ext]) throw new Error("Invalid extension");
+                if (!minificationOptions[ext]) throw new Error("Invalid extension ("+ext+") for minification");
 
                 const files = await this.findFilesByExtension(this.outputDir, ext);
                 await Promise.all(files.map(async file => {
