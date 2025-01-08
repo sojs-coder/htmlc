@@ -10,7 +10,7 @@ import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 
 // Cache void tags Set
 const VOID_TAGS = new Set([
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", 
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
     "menuitem", "meta", "param", "source", "track", "wbr", "path"
 ]);
 
@@ -187,7 +187,13 @@ class ComponentParser {
             const content = await fs.readFile(fullInputPath, 'utf-8');
             const processedContent = this.parseComponentTags(content, fullInputPath);
             await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
-            await fs.writeFile(fullOutputPath, processedContent);
+            const extName = path.extname(fullInputPath).slice(1);
+            if (this.minify && this.toMinify.includes(extName) && minificationOptions[extName]) {
+                const minned = await minify(fullOutputPath, minificationOptions.html);
+                await fs.writeFile(fullOutputPath, minned);
+            } else {
+                await fs.writeFile(fullOutputPath, processedContent);
+            }
             console.log(`Processed: ${fullInputPath} -> ${fullOutputPath}`);
         }
     }
@@ -388,10 +394,10 @@ class ComponentParser {
                 let processedContent = this.parseComponentTags(content, filePath);
                 const relativePath = path.relative(inputDir, filePath);
                 const outputPath = path.join(this.outputDir, relativePath);
-                
+
                 await fs.mkdir(path.dirname(outputPath), { recursive: true });
                 await fs.writeFile(outputPath, processedContent);
-                if(this.minify && this.toMinify.includes("html")) {
+                if (this.minify && this.toMinify.includes("html")) {
                     const minned = await minify(outputPath, minificationOptions.html);
                     await fs.writeFile(outputPath, minned);
                 }
@@ -401,11 +407,11 @@ class ComponentParser {
         }));
         this.toMinify = this.toMinify.filter(ext => ext !== "html");
         console.log(`\nProcessing complete. Output directory: ${this.outputDir}`);
-        if(this.toMinify.length > 0 && this.minify) {
+        if (this.toMinify.length > 0 && this.minify) {
             console.log(`Minifying files with extensions: ${this.toMinify.join(", ")}`);
             await Promise.all(this.toMinify.map(async ext => {
-                if(ext === "html") return;
-                if(!minificationOptions[ext]) throw new Error("Invalid extension");
+                if (ext === "html") return;
+                if (!minificationOptions[ext]) throw new Error("Invalid extension");
 
                 const files = await this.findFilesByExtension(this.outputDir, ext);
                 await Promise.all(files.map(async file => {
@@ -445,7 +451,7 @@ if (!isMainThread) {
 }
 
 // Main execution
-if(process.argv[0].includes("htmlc") || process.argv[1].includes("index.js")) {
+if (process.argv[0].includes("htmlc") || process.argv[1].includes("index.js")) {
     const parseArgs = () => {
         const args = process.argv.slice(2);
         const directory = args.find(arg => !arg.startsWith('--'));
