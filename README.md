@@ -98,6 +98,8 @@ htmlc pages --depth=2 --names=header,footer --out=dist --logs
 - `--names=a,b,...`: Specify specific component names to process
 - `--out=<path>`: Specify output directory
 - `--logs`: Enable debug logging
+- `--minify`: Do you want to minify files or not?
+- `--toMinify=a,b`: What file extensions to minify (defaults to html if --minify is enabled. Will not work without --minify)
 - `help`: Show help information
 
 ## API Documentation
@@ -116,6 +118,8 @@ const parser = new ComponentParser(directory, options);
   names: string[],   // Specific component names to process
   out: string,       // Output directory path
   logs: boolean      // Enable debug logging
+  minify: boolean    // Enable minification
+  toMinify: string[] // File extensions to minify (if minify is enabled). Defaults to ["html"]
 }
 ```
 

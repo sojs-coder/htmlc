@@ -6,6 +6,7 @@
     "bin": {
         "htmlc": "index.js"
     },
+    "type": "module",
     "keywords": [
         "html",
         "components",
@@ -24,6 +25,7 @@
     },
     "preferGlobal": true,
     "dependencies": {
+        "minify": "^12.0.0",
         "ws": "^8.18.0"
     }
 }

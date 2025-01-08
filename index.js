@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-
-const fs = require('fs').promises;  // Use promises-based fs
-const path = require('path');
-const http = require('http');
-const ws = require('ws');
-const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
+import fs from 'fs/promises';  // Use promises-based fs
+import fsa from 'fs';  // Use not promises-based fs
+import path from 'path';
+import http from 'http';
+import os from 'os';
+import ws from 'ws';
+import { minify } from 'minify';
+import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 
 // Cache void tags Set
 const VOID_TAGS = new Set([
@@ -19,6 +21,42 @@ const ATTR_REGEX = /(\w+)[\s]?=[\s]?"([^"]*)"/g;
 const CONDITIONAL_REGEX = /{%\s*if\s*\((.*?)\)\s*%}([\s\S]*?)(?:{%\s*endif\s*%})/g;
 const FOR_REGEX = /{% for\s+(\w+)\s+in\s+(\w+)\s*%}([\s\S]*?){% endfor %}/g;
 
+const minificationOptions = {
+    "js": {
+        "type": "putout",
+        "putout": {
+            "quote": "'",
+            "mangle": true,
+            "mangleClassNames": true,
+            "removeUnusedVariables": true,
+            "removeConsole": false,
+            "removeUselessSpread": true
+        }
+    },
+    "html": {
+        "removeComments": true,
+        "removeCommentsFromCDATA": true,
+        "removeCDATASectionsFromCDATA": true,
+        "collapseWhitespace": true,
+        "collapseBooleanAttributes": true,
+        "removeAttributeQuotes": true,
+        "removeRedundantAttributes": true,
+        "useShortDoctype": true,
+        "removeEmptyAttributes": true,
+        "removeEmptyElements": false,
+        "removeOptionalTags": true,
+        "removeScriptTypeAttributes": true,
+        "removeStyleLinkTypeAttributes": true,
+        "minifyJS": true,
+        "minifyCSS": true
+    },
+    "css": {
+        "type": "clean-css",
+        "clean-css": {
+            "compatibility": "*"
+        }
+    }
+}
 class ComponentParser {
     constructor(directory, options = {}) {
         this.directory = directory;
@@ -31,6 +69,8 @@ class ComponentParser {
         this.failedComponents = new Map(); // Track failed component loads
         this.watch = options.watch || false;
         this.processing = false;
+        this.minify = options.minify || false;
+        this.toMinify = options.toMinify || ['html'];
         this.wss;
         this.server;
         this.wsclients = new Map();
@@ -61,7 +101,7 @@ class ComponentParser {
                 }
 
             } catch (error) {
-                console.log(error)
+                console.error(error)
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('File not found');
             }
@@ -87,14 +127,14 @@ class ComponentParser {
         try {
             const clientScript = await fs.readFile(path.join(__dirname, 'client.js'), 'utf-8');
             return content.replace('</body>', `<script>${clientScript}</script></body>`);
-        } catch (err) {
-            console.log(err);
+        } catch (error) {
+            console.error(error);
             return content;
         }
     }
     watchDirectory() {
-        const fs = require('fs');
-        fs.watch(this.directory, { recursive: true }, async (eventType, filename) => {
+
+        fsa.watch(this.directory, { recursive: true }, async (eventType, filename) => {
             if (filename && eventType === 'change') {
                 console.log(`File changed: ${filename}`);
                 try {
@@ -105,7 +145,7 @@ class ComponentParser {
                             if (currPath) {
                                 const path2 = (currPath === '/' ? '/index.html' : currPath);
                                 const filePath = path.join(this.outputDir, path2);
-                                fs.readFile(filePath, 'utf-8', (err, data) => {
+                                fsa.readFile(filePath, 'utf-8', (err, data) => {
                                     this.injectClientScript(data).then(content => {
                                         client.send("reload")
                                         // client.send(content);
@@ -114,13 +154,14 @@ class ComponentParser {
                             }
                         });
                     }
-                } catch (err) {
+                } catch (error) {
                     console.error(`Error processing file: ${filename}`);
+                    console.error(error);
                 }
             }
         });
         //watch components directory
-        fs.watch(path.join(process.cwd(), 'components'), { recursive: true }, async (eventType, filename) => {
+        fsa.watch(path.join(process.cwd(), 'components'), { recursive: true }, async (eventType, filename) => {
             if (filename && eventType === 'change') {
                 console.log(`Component file changed: ${filename}`);
                 try {
@@ -309,7 +350,20 @@ class ComponentParser {
                 block.replace(new RegExp(`{{${item}}}`, 'g'), val)).join('');
         });
     }
-
+    async findFilesByExtension(dir, ext) {
+        const files = await fs.readdir(dir);
+        const result = await Promise.all(files.map(async file => {
+            const fullPath = path.join(dir, file);
+            const stat = await fs.stat(fullPath);
+            if (stat.isDirectory()) {
+                return await this.findFilesByExtension(fullPath, ext);
+            } else if (path.extname(file) === `.${ext}`) {
+                return [fullPath];
+            }
+            return [];
+        }));
+        return result.flat();
+    }
     async processDirectory() {
         if (this.processing) return;
         this.processing = true;
@@ -321,7 +375,7 @@ class ComponentParser {
         await this.copyDirectoryContents(inputDir, this.outputDir);
 
         const htmlFiles = await this.findHtmlFiles(inputDir);
-        const numCPUs = require('os').cpus().length;
+        const numCPUs = os.cpus().length;
         const chunkSize = Math.ceil(htmlFiles.length / numCPUs);
 
         const chunks = Array(Math.ceil(htmlFiles.length / chunkSize))
@@ -331,18 +385,36 @@ class ComponentParser {
         await Promise.all(chunks.map(async chunk => {
             await Promise.all(chunk.map(async filePath => {
                 const content = await fs.readFile(filePath, 'utf-8');
-                const processedContent = this.parseComponentTags(content, filePath);
+                let processedContent = this.parseComponentTags(content, filePath);
                 const relativePath = path.relative(inputDir, filePath);
                 const outputPath = path.join(this.outputDir, relativePath);
-
+                
                 await fs.mkdir(path.dirname(outputPath), { recursive: true });
                 await fs.writeFile(outputPath, processedContent);
+                if(this.minify && this.toMinify.includes("html")) {
+                    const minned = await minify(outputPath, minificationOptions.html);
+                    await fs.writeFile(outputPath, minned);
+                }
                 this.log(`Processed: ${filePath} -> ${outputPath}`);
                 this.lastUpdatedTimes.set(filePath, Date.now());
             }));
         }));
-
+        this.toMinify = this.toMinify.filter(ext => ext !== "html");
         console.log(`\nProcessing complete. Output directory: ${this.outputDir}`);
+        if(this.toMinify.length > 0 && this.minify) {
+            console.log(`Minifying files with extensions: ${this.toMinify.join(", ")}`);
+            await Promise.all(this.toMinify.map(async ext => {
+                if(ext === "html") return;
+                if(!minificationOptions[ext]) throw new Error("Invalid extension");
+
+                const files = await this.findFilesByExtension(this.outputDir, ext);
+                await Promise.all(files.map(async file => {
+                    const minifiedContent = await minify(file, minificationOptions[ext]);
+                    await fs.writeFile(file, minifiedContent);
+                    console.log(`Minified: ${file}`);
+                }));
+            }));
+        }
         if (this.failedComponents.size > 0) {
             console.warn('\nFailed components:');
             this.failedComponents.forEach((count, key) => {
@@ -373,7 +445,7 @@ if (!isMainThread) {
 }
 
 // Main execution
-if (require.main === module) {
+if(process.argv[0].includes("htmlc") || process.argv[1].includes("index.js")) {
     const parseArgs = () => {
         const args = process.argv.slice(2);
         const directory = args.find(arg => !arg.startsWith('--'));
@@ -393,6 +465,8 @@ Options:
   --watch           Watch for changes in the directory.
   --server          Start a server to serve the processed files.
   --port=<n>        Specify the port for the server (default 9000).
+  --minify          Minify the processed HTML files (default false)
+  --toMinify=a,b    Specify file extensions to minify (default html)
   help              Show help with list of options.
 `);
             process.exit(0);
@@ -410,6 +484,8 @@ Options:
                 options.server = true;
                 options.port = options.port || 9000;
             }
+            if (arg === '--minify') options.minify = true;
+            if (arg.startsWith('--toMinify=')) options.toMinify = arg.split('=')[1].split(',');
         });
 
         return { directory, options };
@@ -421,10 +497,11 @@ Options:
             const parser = new ComponentParser(directory, options);
             await parser.processDirectory();
         } catch (error) {
+            console.error(error);
             console.error('Error:', error.message);
             process.exit(1);
         }
     })();
 }
 
-module.exports = ComponentParser;
+export default ComponentParser;
